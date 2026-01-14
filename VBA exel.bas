@@ -1,51 +1,135 @@
-Attribute VB_Name = "Module2"
-Sub AnalyseUniqueSAE()
-    Dim ws As Worksheet
-    Dim lastRow As Long
-    Dim pvtCache As PivotCache
-    Dim pvtTable As PivotTable
+Attribute VB_Name = "Module1"
+Sub DetecterMenaces()
+    ' --- 1. CONFIGURATION ET VARIABLES ---
+    Dim wsData As Worksheet, wsRapport As Worksheet
+    Dim lastRow As Long, i As Long
+    Dim dictSyn As Object, dictScan As Object
+    Dim ipSrc As String, dstPort As String, flags As String
+    Dim colIP As Integer, colPort As Integer, colFlag As Integer
+    Dim key As Variant
     
-    Set ws = ThisWorkbook.ActiveSheet
-    lastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
+    ' Seuils (identiques à ton Python)
+    Const LIMIT_SYN_MID As Integer = 25
+    Const LIMIT_SYN_HIGH As Integer = 50
+    Const LIMIT_SCAN_PORTS As Integer = 10
+    Const LIMIT_SCAN_MAX As Integer = 40
     
-    ' 1. MISE EN FORME (Style demandé)
-    ws.Cells.Font.Name = "Comic Sans MS"
-    With ws.Range("A1:J1")
-        .Interior.Color = RGB(249, 115, 22) ' Orange
-        .Font.Color = RGB(255, 255, 255) ' Blanc
-        .Font.Bold = True
-    End With
-
-    ' 2. TRAITEMENT : Création du Tableau Croisé Dynamique (Page 3 de votre doc)
-    ' Cet outil va regrouper les données par IP pour déceler les anomalies
-    Sheets.Add(After:=ws).Name = "Resultats_Analyse"
-    Set pvtCache = ThisWorkbook.PivotCaches.Create(xlDatabase, ws.Range("A1:J" & lastRow))
-    Set pvtTable = pvtCache.CreatePivotTable(Sheets("Resultats_Analyse").Range("A3"), "AnalyseTrafic")
+    Set wsData = ActiveSheet
     
-    With pvtTable
-        .PivotFields("Source_IP").Orientation = xlRowField
-        .AddDataField .PivotFields("Source_IP"), "Nombre de Paquets", xlCount
-        .AddDataField .PivotFields("Dest_Port"), "Ports différents visés", xlCount
-    End With
+    ' Création des dictionnaires (Late binding pour éviter les erreurs de références)
+    Set dictSyn = CreateObject("Scripting.Dictionary") ' Stocke le nombre de SYN par IP
+    Set dictScan = CreateObject("Scripting.Dictionary") ' Stocke un sous-dictionnaire de ports par IP
     
-    ' 3. AFFICHAGE DES RÉSULTATS PERTINENTS (Mise en forme conditionnelle - Page 6)
-    ' On colore en Bleu clair les IP qui dépassent les seuils d'alerte
-    With Sheets("Resultats_Analyse")
-        .Cells.Font.Name = "Comic Sans MS"
-        .Range("A3:C3").Interior.Color = RGB(14, 165, 233) ' Bleu clair
-        .Range("A3:C3").Font.Color = RGB(255, 255, 255)
+    Application.ScreenUpdating = False
+    
+    ' --- 2. IDENTIFICATION DES COLONNES ---
+    ' On cherche les colonnes par leur nom (comme dans ton CSV généré)
+    On Error Resume Next
+    colIP = wsData.Rows(1).Find("Source_IP").Column
+    colPort = wsData.Rows(1).Find("Dest_Port").Column
+    colFlag = wsData.Rows(1).Find("Flags").Column
+    On Error GoTo 0
+    
+    If colIP = 0 Or colPort = 0 Or colFlag = 0 Then
+        MsgBox "Impossible de trouver les colonnes 'Source_IP', 'Dest_Port' ou 'Flags'.", vbCritical
+        Exit Sub
+    End If
+    
+    lastRow = wsData.Cells(wsData.Rows.count, colIP).End(xlUp).Row
+    
+    ' --- 3. ANALYSE DES DONNÉES (BOUCLE) ---
+    For i = 2 To lastRow
+        ipSrc = Trim(wsData.Cells(i, colIP).Value)
+        dstPort = Trim(wsData.Cells(i, colPort).Value)
+        flags = Trim(wsData.Cells(i, colFlag).Value)
         
-        ' Ajout d'un titre explicatif
-        .Range("A1").Value = "IDENTIFICATION DES ACTIVITÉS SUSPECTES"
-        .Range("A1").Font.Size = 14
-        .Range("A1").Font.Bold = True
-    End With
-
-    ' 4. GRAPHIQUE SECTEUR (Page 1 & 2 de votre doc)
-    Dim monGraph As Shape
-    Set monGraph = Sheets("Resultats_Analyse").Shapes.AddChart2(251, xlPie)
-    monGraph.Chart.SetSourceData Source:=Sheets("Resultats_Analyse").Range("A4:B10")
-    monGraph.Chart.ChartTitle.Text = "Répartition des flux par IP"
+        If ipSrc <> "" Then
+            ' A) Logique SYN FLOOD
+            ' Si le flag contient "S"
+            If InStr(1, flags, "S", vbTextCompare) > 0 Then
+                If Not dictSyn.Exists(ipSrc) Then
+                    dictSyn(ipSrc) = 1
+                Else
+                    dictSyn(ipSrc) = dictSyn(ipSrc) + 1
+                End If
+            End If
+            
+            ' B) Logique PORT SCAN
+            ' On vérifie que le port existe
+            If dstPort <> "" Then
+                If Not dictScan.Exists(ipSrc) Then
+                    ' Créer un sous-dictionnaire pour cette IP
+                    Set dictScan(ipSrc) = CreateObject("Scripting.Dictionary")
+                End If
+                ' Ajouter le port s'il n'est pas déjà listé pour cette IP (gestion des doublons)
+                If Not dictScan(ipSrc).Exists(dstPort) Then
+                    dictScan(ipSrc).Add dstPort, 1
+                End If
+            End If
+        End If
+    Next i
     
-    MsgBox "Analyse terminée sur le fichier CSV unique !", vbInformation
+    ' --- 4. GÉNÉRATION DU RAPPORT ---
+    Set wsRapport = Sheets.Add
+    wsRapport.Name = "Rapport_Menaces_" & Format(Now, "hhmm")
+    
+    ' En-têtes
+    wsRapport.Range("A1:E1").Value = Array("IP Source", "Type d'Attaque", "Niveau", "Compteur", "Détails")
+    wsRapport.Range("A1:E1").Font.Bold = True
+    
+    Dim r As Long
+    r = 2
+    
+    ' Vérification SYN FLOOD
+    For Each key In dictSyn.Keys
+        Dim count As Long
+        count = dictSyn(key)
+        
+        If count >= LIMIT_SYN_MID Then
+            wsRapport.Cells(r, 1).Value = key
+            wsRapport.Cells(r, 2).Value = "SYN Flood"
+            If count >= LIMIT_SYN_HIGH Then
+                wsRapport.Cells(r, 3).Value = "HIGH"
+                wsRapport.Cells(r, 3).Interior.Color = vbRed
+            Else
+                wsRapport.Cells(r, 3).Value = "MID"
+                wsRapport.Cells(r, 3).Interior.Color = vbYellow
+            End If
+            wsRapport.Cells(r, 4).Value = count
+            wsRapport.Cells(r, 5).Value = count & " paquets SYN détectés"
+            r = r + 1
+        End If
+    Next key
+    
+    ' Vérification PORT SCAN
+    For Each key In dictScan.Keys
+        Dim uniquePorts As Long
+        uniquePorts = dictScan(key).count
+        
+        If uniquePorts > LIMIT_SCAN_PORTS Then
+            wsRapport.Cells(r, 1).Value = key
+            wsRapport.Cells(r, 2).Value = "Port Scan"
+            If uniquePorts >= LIMIT_SCAN_MAX Then
+                wsRapport.Cells(r, 3).Value = "HIGH"
+                wsRapport.Cells(r, 3).Interior.Color = vbRed
+            Else
+                wsRapport.Cells(r, 3).Value = "MID"
+                wsRapport.Cells(r, 3).Interior.Color = vbYellow
+            End If
+            wsRapport.Cells(r, 4).Value = uniquePorts
+            wsRapport.Cells(r, 5).Value = "Scan sur " & uniquePorts & " ports distincts"
+            r = r + 1
+        End If
+    Next key
+    
+    ' Mise en forme
+    wsRapport.Columns("A:E").AutoFit
+    Application.ScreenUpdating = True
+    
+    If r = 2 Then
+        MsgBox "Aucune menace détectée selon les critères.", vbInformation
+    Else
+        MsgBox "Analyse terminée ! " & (r - 2) & " menaces potentielles identifiées.", vbExclamation
+    End If
+
 End Sub
