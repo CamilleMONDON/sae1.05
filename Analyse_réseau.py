@@ -121,21 +121,9 @@ def generer_rapport_html(data_rows, alertes, dossier_sortie, nom_fichier):
     from collections import Counter
     import os
 
-    global html_path
     html_path = os.path.join(dossier_sortie, f"{nom_fichier}_rapport.html")
-
-    # Top 5 IP sources/destinations
     top_sources = Counter([row["Source_IP"] for row in data_rows]).most_common(5)
     top_dest = Counter([row["Dest_IP"] for row in data_rows]).most_common(5)
-
-    labels_src = [ip for ip, _ in top_sources]
-    data_src = [c for _, c in top_sources]
-
-    labels_dst = [ip for ip, _ in top_dest]
-    data_dst = [c for _, c in top_dest]
-
-    # Couleurs pour les graphiques (Orange et Bleu clair)
-    colors_js = "['#f97316', '#0ea5e9', '#fb923c', '#38bdf8', '#fdba74']"
 
     with open(html_path, "w", encoding="utf-8") as f:
         f.write(f"""
@@ -143,195 +131,152 @@ def generer_rapport_html(data_rows, alertes, dossier_sortie, nom_fichier):
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<title>Rapport trafic réseau</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rapport SAE 1.05</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <style>
 :root {{
-  --bg: #f8fafc;
-  --card: #ffffff;
-  --text: #000000; /* Noir pur */
-  --accent: #f97316; /* Orange */
-  --secondary: #0ea5e9; /* Bleu clair */
-  --border: #e2e8f0;
-  --danger: #dc2626;
-  --header-bg: #f97316; /* Header Orange */
+  --bg: #ffffff; --card: #ffffff; --text: #000000;
+  --accent: #f97316; --secondary: #0ea5e9; --border: #000000;
+  --header-bg: #f97316;
 }}
-
 [data-theme="dark"] {{
-  --bg: #121212; /* Noir */
-  --card: #1e1e1e;
-  --text: #ffffff; /* Blanc */
-  --accent: #fb923c;
-  --secondary: #38bdf8;
-  --border: #333333;
-  --header-bg: #1e1e1e;
+  --bg: #000000; --card: #1c1917; --text: #ffffff; --border: #ffffff;
 }}
-
 body {{
-  margin: 0;
-  /* Application de Comic Sans MS */
-  font-family: "Comic Sans MS", "Comic Sans", "Chalkboard SE", cursive;
-  background: var(--bg);
-  color: var(--text);
-  transition: background 0.3s;
+  margin:0; font-family: "Comic Sans MS", cursive;
+  background:var(--bg); color:var(--text); transition: 0.3s;
 }}
-
 header {{
-  display: flex; justify-content: space-between; align-items: center;
-  padding: 20px 40px; background: var(--header-bg); color: white;
-  box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+  display:flex; justify-content:space-between; align-items:center;
+  padding:15px 30px; background: var(--header-bg); color: white;
+  border-bottom: 3px solid black;
 }}
-
-.toggle {{
-  background: white; color: var(--text);
-  border: 2px solid #000; padding: 8px 16px; border-radius: 10px; cursor: pointer;
-  font-family: "Comic Sans MS", cursive; font-weight: bold;
+.btn-group {{ display: flex; gap: 10px; }}
+.btn {{
+  background: white; border: 2px solid #000; padding: 8px 15px;
+  border-radius: 10px; cursor: pointer; font-family: inherit; font-weight: bold;
 }}
-
-.container {{
-  max-width: 1100px; margin: auto; padding: 30px 20px; display: grid; gap: 25px;
-}}
-
+.container {{ max-width:1100px; margin:auto; padding:20px; display:grid; gap:25px; }}
 .card {{
-  background: var(--card); padding: 25px; border-radius: 20px;
-  box-shadow: 8px 8px 0px rgba(0,0,0,0.1); border: 3px solid var(--text);
+  background:var(--card); padding:20px; border-radius:15px;
+  border: 3px solid var(--text); box-shadow: 8px 8px 0px rgba(0,0,0,0.1);
 }}
-
-h1, h2 {{ margin-top: 0; }}
-h2 {{ color: var(--secondary); text-decoration: underline var(--accent); margin-bottom: 20px; }}
-
-table {{ width: 100%; border-collapse: collapse; }}
-th, td {{ padding: 12px; border: 2px solid var(--border); text-align: left; }}
+h2 {{ color: var(--secondary); text-decoration: underline var(--accent); }}
+table {{ width:100%; border-collapse:collapse; }}
+th, td {{ padding:10px; border: 2px solid var(--text); text-align:left; }}
 th {{ background: var(--secondary); color: white; }}
-
-.badge-high {{
-  background: var(--danger); color: white; padding: 5px 12px; border-radius: 5px; font-weight: bold;
-}}
-.badge-mid {{
-  background: var(--accent); color: white; padding: 5px 12px; border-radius: 5px; font-weight: bold;
-}}
-
-.grid {{
-  display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 25px;
-}}
-
-footer {{ text-align: center; padding: 30px; font-weight: bold; }}
+.badge {{ padding:4px 10px; border-radius:5px; font-weight:bold; color:white; }}
+.grid {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(450px,1fr)); gap:25px; }}
+footer {{ text-align: center; padding: 20px; opacity: 0.7; font-size: 0.9em; }}
 </style>
 </head>
-
 <body data-theme="light">
 
 <header>
-  <h1>📊 Analyse Réseau</h1>
-  <button class="toggle" onclick="toggleTheme()">Changer le Mode</button>
+  <h1 class="lang" data-fr="📡 Analyseur Réseau - SAE 1.05" data-en="📡 Network Analyzer - SAE 1.05">📡 Analyseur Réseau - SAE 1.05</h1>
+  <div class="btn-group">
+    <button class="btn" id="btnLang" onclick="toggleLang()">English</button>
+    <button class="btn lang" id="btnTheme" onclick="toggleTheme()" data-fr="🌓 Mode" data-en="🌓 Mode">🌓 Mode</button>
+  </div>
 </header>
 
 <div class="container">
-
-<div class="card">
-<h2>🚨 Menaces détectées</h2>
-<table>
-  <thead>
-    <tr>
-      <th>IP source</th><th>Type</th><th>Paquets</th><th>Détails</th><th>Niveau</th>
-    </tr>
-  </thead>
-  <tbody>
+  <div class="card">
+    <h2 class="lang" data-fr="🚨 Menaces Détectées" data-en="🚨 Detected Threats">🚨 Menaces Détectées</h2>
+    <table>
+      <thead>
+        <tr>
+          <th class="lang" data-fr="IP Source" data-en="Source IP">IP Source</th>
+          <th class="lang" data-fr="Type" data-en="Type">Type</th>
+          <th class="lang" data-fr="Paquets" data-en="Packets">Paquets</th>
+          <th class="lang" data-fr="Détails" data-en="Details">Détails</th>
+          <th class="lang" data-fr="Niveau" data-en="Level">Niveau</th>
+        </tr>
+      </thead>
+      <tbody>
 """)
-
         if alertes:
             for a in alertes:
-                badge = "badge-high" if a["niveau"] == "HIGH" else "badge-mid"
+                color = "#dc2626" if "ÉLEVÉ" in a['niveau'] else "#f97316"
+                # Traduction dynamique des types et détails
+                type_en = a['type'].replace('Scan de ports', 'Port Scan')
+                det_en = a['details'].replace('Volume', 'Volume').replace('paquets', 'packets').replace('Tentative', 'Attempt').replace('ports différents', 'different ports')
+                niv_en = a['niveau'].replace('ÉLEVÉ', 'HIGH').replace('MOYEN', 'MEDIUM')
+
                 f.write(f"""
-    <tr>
-      <td><strong>{a['ip']}</strong></td>
-      <td>{a['type']}</td>
-      <td>{a['nb_packets']}</td>
-      <td>{a['details']}</td>
-      <td><span class="{badge}">{a['niveau']}</span></td>
-    </tr>
-""")
+        <tr>
+          <td>{a['ip']}</td>
+          <td class="lang" data-fr="{a['type']}" data-en="{type_en}">{a['type']}</td>
+          <td>{a['nb_packets']}</td>
+          <td class="lang" data-fr="{a['details']}" data-en="{det_en}">{a['details']}</td>
+          <td><span class="badge lang" style="background:{color}" data-fr="{a['niveau']}" data-en="{niv_en}">{a['niveau']}</span></td>
+        </tr>""")
         else:
-            f.write("<tr><td colspan='5' style='text-align:center;'>Tout est calme... ✅</td></tr>")
+            f.write('<tr><td colspan="5" style="text-align:center;" class="lang" data-fr="✅ Aucune activité suspecte" data-en="✅ No suspicious activity">✅ Aucune activité suspecte</td></tr>')
 
         f.write(f"""
-  </tbody>
-</table>
-</div>
-
-<div class="grid">
-  <div class="card">
-    <h2>Top 5 IP sources</h2>
-    <canvas id="srcChart"></canvas>
+      </tbody>
+    </table>
   </div>
 
-  <div class="card">
-    <h2>Top 5 IP destinations</h2>
-    <canvas id="dstChart"></canvas>
+  <div class="grid">
+    <div class="card"><h2 class="lang" id="titleSrc" data-fr="Top 5 Sources" data-en="Top 5 Sources">Top 5 Sources</h2><canvas id="srcChart"></canvas></div>
+    <div class="card"><h2 class="lang" id="titleDst" data-fr="Top 5 Destinations" data-en="Top 5 Destinations">Top 5 Destinations</h2><canvas id="dstChart"></canvas></div>
   </div>
 </div>
 
-</div>
-
-<footer>Fait avec Python et beaucoup de Comic Sans MS !</footer>
+<footer class="lang" data-fr="Généré pour le service informatique - Roanne" data-en="Generated for IT Department - Roanne">
+  Généré pour le service informatique - Roanne
+</footer>
 
 <script>
+let currentLang = 'fr';
+
 function toggleTheme() {{
-  const b = document.body;
-  b.dataset.theme = b.dataset.theme === "dark" ? "light" : "dark";
+    document.body.dataset.theme = document.body.dataset.theme === 'dark' ? 'light' : 'dark';
 }}
 
-const chartColors = {colors_js};
+function toggleLang() {{
+    currentLang = currentLang === 'fr' ? 'en' : 'fr';
+    document.getElementById('btnLang').innerText = currentLang === 'fr' ? 'English' : 'Français';
 
-// Options pour forcer Comic Sans dans les graphiques aussi
-const chartOptions = {{
+    // Traduction de tous les éléments avec la classe .lang
+    document.querySelectorAll('.lang').forEach(el => {{
+        el.innerText = el.getAttribute('data-' + currentLang);
+    }});
+}}
+
+const commonOptions = {{
     responsive: true,
     plugins: {{
         legend: {{
             position: 'bottom',
-            labels: {{
-                font: {{ family: 'Comic Sans MS', size: 14 }},
-                color: '#000'
-            }}
+            labels: {{ font: {{ family: 'Comic Sans MS', size: 12 }} }}
         }}
     }}
 }};
 
-// Utilisation de type: 'pie' pour ne pas avoir de trou
 new Chart(document.getElementById('srcChart'), {{
   type: 'pie',
   data: {{
-    labels: {labels_src},
-    datasets: [{{
-        data: {data_src},
-        backgroundColor: chartColors,
-        borderColor: '#000',
-        borderWidth: 2
-    }}]
+    labels: {[ip for ip, _ in top_sources]},
+    datasets: [{{ data: {[c for _, c in top_sources]}, backgroundColor: ['#f97316', '#0ea5e9', '#fb923c', '#38bdf8', '#fdba74'], borderColor: '#000', borderWidth: 2 }}]
   }},
-  options: chartOptions
+  options: commonOptions
 }});
 
 new Chart(document.getElementById('dstChart'), {{
   type: 'pie',
   data: {{
-    labels: {labels_dst},
-    datasets: [{{
-        data: {data_dst},
-        backgroundColor: chartColors,
-        borderColor: '#000',
-        borderWidth: 2
-    }}]
+    labels: {[ip for ip, _ in top_dest]},
+    datasets: [{{ data: {[c for _, c in top_dest]}, backgroundColor: ['#f97316', '#0ea5e9', '#fb923c', '#38bdf8', '#fdba74'], borderColor: '#000', borderWidth: 2 }}]
   }},
-  options: chartOptions
+  options: commonOptions
 }});
 </script>
-
 </body>
 </html>
 """)
-
     webbrowser.open(f"file://{html_path}")
 
 # TRAITEMENT FICHIER
